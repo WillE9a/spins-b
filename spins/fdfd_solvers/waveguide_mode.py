@@ -357,6 +357,55 @@ def solve_waveguide_mode(
 
     return results
 
+def solve_wg_mode(
+        mode_number: int,
+        omega: complex,
+        dxes: dx_lists_t,
+        axis: int,
+        polarity: int,
+        slices: List[slice],
+        epsilon: field_t,
+        mu: field_t = None,
+        wavenumber_correction: bool = True) -> Dict[str, complex or np.ndarray]:
+    """
+    Given a 3D grid, selects a slice from the grid and attempts to
+     solve for an eigenmode propagating through that slice.
+
+    :param mode_number: Number of the mode, 0-indexed
+    :param omega: Angular frequency of the simulation
+    :param dxes: Grid parameters [dx_e, dx_h] as described in fdfd_tools.operators header
+    :param axis: Propagation axis (0=x, 1=y, 2=z)
+    :param polarity: Propagation direction (+1 for +ve, -1 for -ve)
+    :param slices: epsilon[tuple(slices)] is used to select the portion of the grid to use
+        as the waveguide cross-section. slices[axis] should select only one
+    :param epsilon: Dielectric constant
+    :param mu: Magnetic permeability (default 1 everywhere)
+    :param wavenumber_correction: Whether to correct the wavenumber to
+        account for numerical dispersion (default True)
+    :return: {'E': List[np.ndarray], 'H': List[np.ndarray], 'wavenumber': complex}
+    """
+    if mu is None:
+        mu = [np.ones_like(epsilon[0])] * 3
+    '''
+    Solve the 2D problem in the specified plane
+    '''
+    # Define rotation to set z as propagation direction
+    order = np.roll(range(3), 2 - axis)
+    reverse_order = np.roll(range(3), axis - 2)
+
+    # Reduce to 2D and solve the 2D problem
+    args_2d = {
+        'dxes': [[dx[i][slices[i]] for i in order[:2]] for dx in dxes],
+        'epsilon':
+        vec([epsilon[i][tuple(slices)].transpose(order) for i in order]),
+        'mu':
+        vec([mu[i][tuple(slices)].transpose(order) for i in order]),
+        'wavenumber_correction':
+        wavenumber_correction,
+    }
+    fields_2d = solve_waveguide_mode_2d(mode_number, omega=omega, **args_2d)
+    return fields_2d
+
 
 def compute_source(
         E: field_t,
@@ -539,11 +588,9 @@ def compute_overlap_e(
     e_cross_ = operators.poynting_e_cross(vec(Ee), dxes)
 
     overlap_e = dn @ ds @ (-h_cross_ + e_cross_ @ e2h)
-
     # Normalize
     norm_factor = np.abs(overlap_e @ vec(Ee))
     overlap_e /= norm_factor
-
     return unvec(overlap_e, E[0].shape)
 
 

@@ -88,7 +88,7 @@ class MaxwellSolver:
                  err_thresh=DEFAULT_ERROR_THRESHOLD,
                  max_iters=DEFAULT_MAX_ITERS,
                  solver='CG'):
-        """ Construct MaxwellFDFD solver.
+        """ Construct MaxwellFDFD solver. 
 
         Args:
             shape: Shape of simulation domain in grid units.
@@ -148,6 +148,13 @@ class MaxwellSolver:
         eps_unvec = fdfd_tools.unvec(epsilon, self.shape)
         mu_unvec = fdfd_tools.unvec(mu, self.shape)
         E0_unvec = fdfd_tools.unvec(E0, self.shape)
+
+        # Workaround to avoid Maxwell bug on solving matrix system with J = 0       
+        if np.amax(np.abs(J)) == 0.0:
+            J[int(len(J) // 2.5)] = 1e-9
+            print("Using workaround due to J = 0")
+            #return fdfd_tools.vec(E0_unvec)
+
         slices = [slice(0, sh) for sh in self.shape]
         if symmetry[0] == 1:
             slices[0] = slice(self.shape[0] // 2, self.shape[0])
@@ -279,7 +286,7 @@ class MaxwellSolver:
         def check_existence(filename):
             r = requests.get(server_url + sim_name_prefix + filename)
             return r.status_code == 200
-
+                
         while True:
             time.sleep(1)  # Wait one second before retry.
             try:
@@ -367,6 +374,8 @@ class MaxwellSolver:
                         download_dir,
                         sim_name_prefix + 'Q' + str(i) + '_' + comp)
                     field_comp = None
+                    print("######### File name #########")
+                    print(file_prefix + 'r')
                     with h5py.File(file_prefix + 'r') as f:
                         field_comp = f['data'][:].astype(np.complex128)
                     with h5py.File(file_prefix + 'i') as f:
@@ -380,6 +389,8 @@ class MaxwellSolver:
                 file_prefix = os.path.join(download_dir,
                                            sim_name_prefix + 'E_' + comp)
                 field_comp = None
+                print("######### File name #########")
+                print(file_prefix + 'r')
                 with h5py.File(file_prefix + 'r') as f:
                     field_comp = f['data'][:].astype(np.complex128)
                 with h5py.File(file_prefix + 'i') as f:

@@ -501,7 +501,6 @@ def normalize_source_by_sim(
     # TODO(logansu): Make this work for nonuniform meshes.
     dx = np.real(dxes[0][0][0])
     cur_power = 0.5 * np.sum(J_dot_E[:]) * dx**3
-
     J_normalized = copy.deepcopy(source)
     for i in range(3):
         J_normalized[i] *= np.sqrt(power / cur_power)
