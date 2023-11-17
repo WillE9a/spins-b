@@ -387,6 +387,23 @@ class DipoleSource(optplan.EmSource):
     phase = types.FloatType()
     power = types.FloatType()
     normalize_by_sim = types.BooleanType(default=False)
+    
+@optplan.register_node_type()
+class DipoleSourceOffAxis(optplan.EmSource):
+    """Represents a dipole source.
+
+    Attributes:
+        position: Position of the dipole (will snap to grid).
+        axis: Amplitudes of dipole at directions [x, y, z].
+        phase: Phase of the dipole source (in radian).
+        power: Power assuming uniform dielectric space with the permittivity.
+    """
+    type = schema_utils.polymorphic_model_type("source.dipole_source_offaxis")
+    position = optplan.vec3d()
+    axis = types.ListType(types.FloatType())
+    phase = types.ListType(types.FloatType())
+    power = types.FloatType()
+    normalize_by_sim = types.BooleanType(default=False)
 
 
 @optplan.register_node_type()
@@ -430,6 +447,8 @@ class WaveguideModeEigOverlap(optplan.EmOverlap):
             mode 0, the mode with second largest propagation constant is mode 1,
             etc.
         power: The transmission power of the mode.
+        wavevector: Monde wavevector (2*pi/a)
+        latt_const: PhC lattice constant (nm)
     """
     type = schema_utils.polymorphic_model_type("overlap.waveguide_mode_eig")
     center = optplan.vec3d()
@@ -437,7 +456,8 @@ class WaveguideModeEigOverlap(optplan.EmOverlap):
     normal = optplan.vec3d()
     mode_num = types.IntType()
     power = types.FloatType()
-
+    wavevector = types.FloatType()
+    latt_const = types.FloatType()
 
 @optplan.register_node_type()
 class FdfdSimulation(optplan.Function):
@@ -458,6 +478,7 @@ class FdfdSimulation(optplan.Function):
     source = optplan.ReferenceType(optplan.EmSource)
     wavelength = types.FloatType()
     solver = types.StringType(choices=("maxwell_bicgstab", "maxwell_cg",
+                                       "maxwell_lgmres", "maxwell_Jacobi-Davidson",
                                        "local_direct"))
     bloch_vector = types.ListType(types.FloatType())
 

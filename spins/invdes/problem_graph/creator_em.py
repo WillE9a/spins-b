@@ -234,18 +234,18 @@ class DipoleSource:
         source = fdfd_solvers.dipole.build_dipole_source(
             omega=2 * np.pi / wlen,
             dxes=simspace.dxes,
-            eps=space_inst.eps_bg.grids,
-            position=space_inst.eps_bg.pos2ind(self._params.position,
+            eps=space_inst.eps_fg.grids,
+            position=space_inst.eps_fg.pos2ind(self._params.position,
                                                which_shifts=None).astype(int),
             axis=self._params.axis,
             power=self._params.power,
-            phase=np.exp(1j * phase))
+            phase=np.exp(1j * phase))            
 
         if self._params.normalize_by_sim:
             source = fdfd_tools.free_space_sources.normalize_source_by_sim(
                 omega=2 * np.pi / wlen,
                 source=source,
-                eps=space_inst.eps_bg.grids,
+                eps=space_inst.eps_fg.grids,
                 dxes=simspace.dxes,
                 pml_layers=simspace.pml_layers,
                 solver=solver,
@@ -253,6 +253,54 @@ class DipoleSource:
 
         return source
 
+
+@optplan.register_node(optplan.DipoleSourceOffAxis)
+class DipoleSourceOffAxis:
+
+    def __init__(self,
+                 params: optplan.DipoleSource,
+                 work: Optional[workspace.Workspace] = None) -> None:
+        self._params = params
+
+    def __call__(self, simspace: SimulationSpace, wlen: float, solver: Callable,
+                 **kwargs) -> fdfd_tools.VecField:
+        """Creates the source vector.
+
+        Args:
+            simspace: Simulation space.
+            wlen: Wavelength of source.
+            solver: If `normalize_by_source` is `True`, `solver` will be used
+                to run an EM simulation to normalize the source power.
+
+        Returns:
+            The source.
+        """
+        phase = self._params.phase
+        if phase is None:
+            phase = 0
+
+        space_inst = simspace(wlen)
+        source = fdfd_solvers.dipole.build_dipole_source_off_axis(
+            omega=2 * np.pi / wlen,
+            dxes=simspace.dxes,
+            eps=space_inst.eps_fg.grids,
+            position=space_inst.eps_fg.pos2ind(self._params.position,
+                                               which_shifts=None).astype(int),
+            axis=self._params.axis,
+            power=self._params.power,
+            phase=[np.exp(1j * phi) for phi in phase])           
+
+        if self._params.normalize_by_sim:
+            source = fdfd_tools.free_space_sources.normalize_source_by_sim(
+                omega=2 * np.pi / wlen,
+                source=source,
+                eps=space_inst.eps_fg.grids,
+                dxes=simspace.dxes,
+                pml_layers=simspace.pml_layers,
+                solver=solver,
+                power=self._params.power)
+
+        return source
 
 class FdfdSimulation(problem.OptimizationFunction):
     """Represents a FDFD simulation.
@@ -443,17 +491,22 @@ def _create_solver(solver_name: str, simspace: SimulationSpace) -> Callable:
     """
     if solver_name == "maxwell_cg":
         from spins.fdfd_solvers.maxwell import MaxwellSolver
-        solver = MaxwellSolver(simspace.dims, solver="CG")
+        solver = MaxwellSolver(simspace.dims, solver="CG", max_iters=20000, err_thresh=1e-5)
     elif solver_name == "maxwell_bicgstab":
         from spins.fdfd_solvers.maxwell import MaxwellSolver
-        solver = MaxwellSolver(simspace.dims, solver="biCGSTAB")
+        solver = MaxwellSolver(simspace.dims, solver="biCGSTAB", max_iters=20000, err_thresh=1e-5)
+    elif solver_name == "maxwell_lgmres":
+        from spins.fdfd_solvers.maxwell import MaxwellSolver
+        solver = MaxwellSolver(simspace.dims, solver="lgmres", max_iters=20000, err_thresh=1e-5)      
+    elif solver_name == "maxwell_Jacobi-Davidson":
+        from spins.fdfd_solvers.maxwell import MaxwellSolver
+        solver = MaxwellSolver(simspace.dims, solver="Jacobi-Davidson", max_iters=20000, err_thresh=1e-5)        
     elif solver_name == "local_direct":
         solver = DIRECT_SOLVER
     else:
         raise ValueError("Unknown solver, got {}".format(solver_name))
 
     return solver
-
 
 @optplan.register_node(optplan.FdfdSimulation)
 def create_fdfd_simulation(params: optplan.FdfdSimulation,
@@ -578,6 +631,38 @@ class WaveguideModeOverlap:
                 self._params.extents),
             axis=gridlock.axisvec2axis(self._params.normal),
             polarity=gridlock.axisvec2polarity(self._params.normal),
+            power=self._params.power)
+
+
+@optplan.register_node(optplan.WaveguideModeEigOverlap)
+class WaveguideModeEigOverlap:
+
+    def __init__(self,
+                 params: optplan.WaveguideModeEigOverlap,
+                 work: workspace.Workspace = None) -> None:
+        """Creates a new PhC waveguide mode overlap.
+
+        Args:
+            params: PhC waveguide mode parameters.
+            work: Unused.
+        """
+        self._params = params
+
+    def __call__(self, simspace: SimulationSpace, wlen: float,
+                 **kwargs) -> fdfd_tools.VecField:
+        space_inst = simspace(wlen)
+        return fdfd_solvers.waveguide_mode.build_photonic_crystal_waveguide_overlap(
+            omega_appx=2 * np.pi / wlen,
+            wavenumber=self._params.wavevector * 2 * np.pi / self._params.latt_const,
+            dxes=simspace.dxes,
+            eps=space_inst.eps_bg.grids,
+            mu=None,
+            axis=gridlock.axisvec2axis(self._params.normal),
+            waveguide_slice=grid_utils.create_region_slices(
+                simspace.edge_coords, self._params.center,
+                self._params.extents),
+            polarity=gridlock.axisvec2polarity(self._params.normal),
+            mode_num=self._params.mode_num,
             power=self._params.power)
 
 

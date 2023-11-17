@@ -38,7 +38,29 @@ class NormalInitializer(Initializer):
     type = schema_utils.polymorphic_model_type("initializer.normal")
     mean = types.FloatType()
     std = types.FloatType()
+    
+@optplan.register_node_type()
+class LoadInitializer(Initializer):
+    """Initializes parametrization using a previous parametrization.
 
+    The parametrization values are initialized element-wise by a a previous
+    dielectric distribution.
+
+    Attributes:
+        param: Previous parametrization.
+    """
+    type = schema_utils.polymorphic_model_type("initializer.load")
+    param = optplan.ReferenceType(optplan.Parametrization)
+    
+@optplan.register_node_type()
+class DirectInitializer(Initializer):
+    """Initializes the parametrization directely, using an external parameter vector.
+
+    Attributes:
+        param: Parameter vector.
+    """
+    type = schema_utils.polymorphic_model_type("initializer.direct")
+    param = types.ListType(types.FloatType())   
 
 @optplan.register_node_type()
 class PixelParametrization(optplan.Parametrization):
@@ -123,6 +145,31 @@ class CubicParametrization(optplan.Parametrization):
     reflection_symmetry = types.ListType(types.BooleanType())
     periods = types.ListType(types.IntType())
 
+@optplan.register_node_type()
+class CubicParametrizationDensityFilter(optplan.Parametrization):
+    """Defines `CubicParametrization wiht a Density Filter and Tanh Projection`.
+
+    Attributes:
+        type: Must be "parametrization.cubic".
+        simulation_space: Name of simulation space to reference to generate
+            the coarse grid.
+        undersample: How much the coarse grid undersamples the rough grid.
+        reflection_symmetry: List of booleans corresponding whether the
+            structure should be symmetric about the x- and y- axes.
+        init_method: Specifications on how to initialize the parametrization.
+    """
+    type = schema_utils.polymorphic_model_type("parametrization.cubic_density_filter")
+    simulation_space = optplan.ReferenceType(optplan.SimulationSpaceBase)
+    undersample = types.FloatType()
+    init_method = optplan.ReferenceType(Initializer)
+    reflection_symmetry = types.ListType(types.BooleanType())
+    periods = types.ListType(types.IntType())
+    center_rad = types.ListType(types.FloatType())
+    min_feature = types.FloatType()
+    eta_i = types.FloatType()
+    eta_e = types.FloatType()
+    eta_d = types.FloatType()
+    k = types.FloatType()
 
 @optplan.register_node_type()
 class HermiteLevelSetParametrization(optplan.Parametrization):

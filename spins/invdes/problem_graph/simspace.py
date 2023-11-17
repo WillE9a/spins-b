@@ -25,6 +25,7 @@ NM_PER_UM = 1000
 class SimulationSpaceInstance(
         NamedTuple(
             "SimulationSpaceInstance", [("eps_bg", gridlock.Grid),
+                                        ("eps_fg", gridlock.Grid),
                                         ("selection_matrix", np.ndarray)])):
     """Represents simulation space at a particular operating condition.
 
@@ -144,7 +145,7 @@ class SimulationSpace:
                         self._selmat_type))
 
             self._cache[wlen] = SimulationSpaceInstance(
-                eps_bg=eps_bg, selection_matrix=selection_mat)
+                eps_bg=eps_bg, eps_fg=eps_fg, selection_matrix=selection_mat)
 
         return self._cache[wlen]
 

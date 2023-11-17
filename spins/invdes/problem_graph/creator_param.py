@@ -17,8 +17,9 @@ class UniformDistribution:
         self._params = params
 
     def __call__(self, shape: List[int]) -> np.ndarray:
-        return np.random.uniform(self._params.min_val, self._params.max_val,
-                                 shape)
+        par = np.random.uniform(self._params.min_val, self._params.max_val, shape)
+        par = filters.gaussian_filter(par, 1)
+        return par
 
 
 @optplan.register_node(optplan.NormalInitializer)
@@ -29,8 +30,32 @@ class NormalDistribution:
         self._params = params
 
     def __call__(self, shape: List[int]) -> np.ndarray:
-        return np.random.normal(self._params.mean, self._params.std, shape)
+        par = np.random.normal(self._params.mean, self._params.std, shape)
+        par = filters.gaussian_filter(par, 1)
+        return par
 
+@optplan.register_node(optplan.LoadInitializer)
+class LoadDistribution:
+
+    def __init__(self, params: optplan.LoadInitializer,
+                 work: workspace.Workspace) -> None:
+        self._work = work        
+        self._params = params
+
+    def __call__(self, shape: List[int]) -> np.ndarray:
+        parametrization = self._work.get_object(self._params.param) 
+        return parametrization.to_vector()
+    
+@optplan.register_node(optplan.DirectInitializer)
+class DirectDistribution:
+
+    def __init__(self, params: optplan.DirectInitializer,
+                 work: workspace.Workspace) -> None:
+        self._work = work        
+        self._params = params
+
+    def __call__(self, shape: List[int]) -> np.ndarray: 
+        return self._params.param    
 
 @optplan.register_node(optplan.PixelParametrization)
 def create_pixel_param(
@@ -68,10 +93,12 @@ def create_grating_feature_constraint(
 
 
 @optplan.register_node(optplan.CubicParametrization)
+@optplan.register_node(optplan.CubicParametrizationDensityFilter)
 @optplan.register_node(optplan.BicubicLevelSetParametrization)
 @optplan.register_node(optplan.HermiteLevelSetParametrization)
 def create_cubic_or_hermite_levelset(
         params: Union[optplan.CubicParametrization,
+                      optplan.CubicParametrizationDensityFilter,
                       optplan.HermiteLevelSetParametrization],
         work: workspace.Workspace) -> parametrization.CubicParam:
     design_dims = work.get_object(params.simulation_space).design_dims
@@ -116,8 +143,10 @@ def create_cubic_or_hermite_levelset(
 
     init_val = work.get_object(
         params.init_method)([len(coarse_x), len(coarse_y)])
-    init_val = filters.gaussian_filter(init_val, 1).flatten(order='F')
-
+    init_val = np.asarray(init_val)
+    #init_val = filters.gaussian_filter(init_val, 1).flatten(order='F')
+    init_val = init_val.flatten(order='F')
+    
     # Make parametrization.
     if params.type == "parametrization.hermite_levelset":
         from spins.invdes.parametrization import levelset_parametrization
@@ -127,6 +156,26 @@ def create_cubic_or_hermite_levelset(
         param_class = levelset_parametrization.BicubicLevelSet
     elif params.type == "parametrization.cubic":
         param_class = parametrization.CubicParam
+    elif params.type == "parametrization.cubic_density_filter":
+        param_class = parametrization.CubicParamDensityFilter  
+        dx = work.get_object(params.simulation_space).dx
+        return param_class(initial_value=init_val,
+                           coarse_x=coarse_x,
+                           coarse_y=coarse_y,
+                           fine_x=fine_x,
+                           fine_y=fine_y,
+                           symmetry=reflection_symmetry,
+                           periodicity=periodicity,
+                           periods=periods,
+                           center_rad=params.center_rad[0]/dx,
+                           center_x=2.0*params.center_rad[1]/dx,
+                           center_y=2.0*params.center_rad[2]/dx,
+                           min_feature=params.min_feature/1000.0,
+                           grid_res=dx/1000.0, 
+                           eta_i = params.eta_i,
+                           eta_e = params.eta_e,
+                           eta_d = params.eta_d,
+                           k = 1 if params.k is None else params.k)        
     else:
         raise ValueError("Unexpected parametrization type, got {}".format(
             params.type))
